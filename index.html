@@ -1,0 +1,114 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#121212">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <title>Wavelength</title>
+
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+</head>
+<body>
+
+    <aside class="sidebar">
+        <div class="brand">
+            <img src="icons/icon-192.png" alt="Wavelength">
+            <span>Wavelength</span>
+        </div>
+
+        <nav>
+            <button class="nav-item active" data-page="home">⌂ <span>Home</span></button>
+            <button class="nav-item" data-page="search">⌕ <span>Search</span></button>
+            <button class="nav-item" data-page="liked">♡ <span>Liked Songs</span></button>
+            <button class="nav-item" data-page="library">▤ <span>Your Library</span></button>
+        </nav>
+
+        <div class="sidebar-bottom">
+            <span class="muted">YOUR MUSIC</span>
+            <p>Stored on this device</p>
+            <div class="storage-status" id="storageStatus">0 songs saved</div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <header class="topbar">
+            <div class="mobile-brand">
+                <img src="icons/icon-192.png" alt="">
+                Wavelength
+            </div>
+
+            <input id="searchInput" type="search" placeholder="What do you want to listen to?">
+
+            <button class="import-button" id="importButton">＋ Add music</button>
+            <input id="fileInput" type="file" accept="audio/*" multiple hidden>
+        </header>
+
+        <section class="welcome">
+            <p class="eyebrow">YOUR PERSONAL MUSIC PLAYER</p>
+            <h1 id="pageTitle">Your music.<br> Your wavelength.</h1>
+            <p id="pageDescription">Your entire music collection, wherever you go.</p>
+        </section>
+
+        <section class="library-section">
+            <div class="section-heading">
+                <h2 id="sectionTitle">Your Library</h2>
+                <span id="songCount">0 songs</span>
+            </div>
+
+            <div id="emptyState" class="empty-state">
+                <div class="empty-icon">♫</div>
+                <h3>Your library is waiting</h3>
+                <p>Add music to start building your offline collection.</p>
+                <button class="primary-button" id="emptyImportButton">Add your music</button>
+            </div>
+
+            <div id="songList" class="song-list"></div>
+        </section>
+    </main>
+
+    <footer class="player">
+        <div class="now-playing">
+            <div class="track-art" id="currentArt">♫</div>
+            <div class="track-info">
+                <strong id="currentTitle">Nothing playing</strong>
+                <span id="currentArtist">Choose a song to begin</span>
+            </div>
+            <button id="likeButton" class="like-button" aria-label="Like song">♡</button>
+        </div>
+
+        <div class="player-controls">
+            <div class="control-buttons">
+                <button id="shuffleButton" aria-label="Shuffle">⤨</button>
+                <button id="previousButton" aria-label="Previous">|◀</button>
+                <button id="playButton" class="play-button" aria-label="Play">▶</button>
+                <button id="nextButton" aria-label="Next">▶|</button>
+                <button id="repeatButton" aria-label="Repeat">↻</button>
+            </div>
+
+            <div class="progress-row">
+                <span id="currentTime">0:00</span>
+                <input id="progress" type="range" min="0" max="100" value="0">
+                <span id="duration">0:00</span>
+            </div>
+        </div>
+
+        <div class="volume-area">
+            <span>🔊</span>
+            <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8">
+        </div>
+    </footer>
+
+    <audio id="audio"></audio>
+
+    <script src="https://cdn.jsdelivr.net/npm/jsmediatags@3.9.7/dist/jsmediatags.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
