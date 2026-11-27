@@ -260,7 +260,7 @@ async function syncFromPC() {
                 throw new Error(`${pcSong.fileName} is empty.`);
             }
 
-            const metadata = await readMetadata(blob, pcSong.fileName);
+            const metadata = null;
 
             const newSong = {
                 id: crypto.randomUUID(),
