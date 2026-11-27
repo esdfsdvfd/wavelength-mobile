@@ -3,6 +3,9 @@ const DB_NAME = "WavelengthLibrary";
 const STORE_NAME = "songs";
 const DB_VERSION = 1;
 
+// Your secure PC server address.
+const PC_SERVER_URL = "https://desktop-mp28i01.tail7f1570.ts.net/";
+
 const audio = document.getElementById("audio");
 
 const elements = {
@@ -41,6 +44,9 @@ let shuffle = false;
 let repeat = false;
 let likedSongs = new Set();
 let currentPage = "home";
+let pcSyncButton;
+
+// DATABASE
 
 function openDatabase() {
     return new Promise((resolve, reject) => {
@@ -91,11 +97,11 @@ function deleteSong(id) {
     });
 }
 
-// Read title, artist, album and embedded cover art from an audio file.
+// METADATA
+
 function readMetadata(blob, filename) {
     return new Promise(resolve => {
         if (!window.jsmediatags) {
-            console.error("jsmediatags did not load.");
             resolve(null);
             return;
         }
@@ -111,31 +117,29 @@ function readMetadata(blob, filename) {
 
                 if (tags.picture && tags.picture.data) {
                     const picture = tags.picture;
-                    const imageBytes = new Uint8Array(picture.data);
 
-                    artwork = new Blob([imageBytes], {
-                        type: picture.format || "image/jpeg"
-                    });
+                    artwork = new Blob(
+                        [new Uint8Array(picture.data)],
+                        { type: picture.format || "image/jpeg" }
+                    );
                 }
 
                 resolve({
                     title: tags.title || filename.replace(/\.[^/.]+$/, ""),
                     artist: tags.artist || "Unknown artist",
                     album: tags.album || "Unknown album",
-                    artwork: artwork,
+                    artwork,
                     metadataRead: true
                 });
             },
 
-            onError: error => {
-                console.warn("MP3 metadata could not be read:", filename, error);
-                resolve(null);
-            }
+            onError: () => resolve(null)
         });
     });
 }
 
-// Import new music.
+// IMPORT MUSIC FROM DEVICE
+
 async function importFiles(files) {
     const audioFiles = Array.from(files).filter(file =>
         file.type.startsWith("audio/") ||
@@ -147,9 +151,17 @@ async function importFiles(files) {
     elements.storageStatus.textContent = "Importing music...";
 
     for (const file of audioFiles) {
+        const existing = await getAllSongs();
+
+        const duplicate = existing.some(song =>
+            song.name === file.name && song.size === file.size
+        );
+
+        if (duplicate) continue;
+
         const metadata = await readMetadata(file, file.name);
 
-        const song = {
+        await saveSong({
             id: crypto.randomUUID(),
             name: file.name,
             title: metadata?.title || file.name.replace(/\.[^/.]+$/, ""),
@@ -160,9 +172,7 @@ async function importFiles(files) {
             size: file.size,
             blob: file,
             added: Date.now()
-        };
-
-        await saveSong(song);
+        });
     }
 
     await loadSongs();
@@ -171,7 +181,128 @@ async function importFiles(files) {
     elements.fileInput.value = "";
 }
 
-// Retry metadata reading for old imports, including previous failed attempts.
+// SYNC MUSIC FROM PC
+
+function createPCSyncButton() {
+    pcSyncButton = document.createElement("button");
+
+    pcSyncButton.type = "button";
+    pcSyncButton.textContent = "↓ Sync from PC";
+    pcSyncButton.className = elements.importButton.className;
+    pcSyncButton.style.marginLeft = "10px";
+
+    elements.importButton.insertAdjacentElement(
+        "afterend",
+        pcSyncButton
+    );
+
+    pcSyncButton.addEventListener("click", syncFromPC);
+}
+
+async function syncFromPC() {
+    if (pcSyncButton.disabled) return;
+
+    pcSyncButton.disabled = true;
+    pcSyncButton.textContent = "Connecting...";
+    elements.storageStatus.textContent = "Connecting to your PC...";
+
+    let downloaded = 0;
+    let skipped = 0;
+
+    try {
+        const response = await fetch(
+            new URL("api/songs", PC_SERVER_URL),
+            { cache: "no-store" }
+        );
+
+        if (!response.ok) {
+            throw new Error("Could not retrieve your PC song list.");
+        }
+
+        const pcSongs = await response.json();
+
+        if (!Array.isArray(pcSongs)) {
+            throw new Error("The PC returned an invalid song list.");
+        }
+
+        const existingSongs = await getAllSongs();
+
+        for (let i = 0; i < pcSongs.length; i++) {
+            const pcSong = pcSongs[i];
+
+            const duplicate = existingSongs.some(song =>
+                song.name === pcSong.fileName &&
+                Number(song.size) === Number(pcSong.size)
+            );
+
+            if (duplicate) {
+                skipped++;
+                continue;
+            }
+
+            pcSyncButton.textContent =
+                `Downloading ${i + 1}/${pcSongs.length}`;
+
+            elements.storageStatus.textContent =
+                `Downloading ${pcSong.fileName}...`;
+
+            const downloadUrl = new URL(pcSong.url, PC_SERVER_URL);
+
+            const downloadResponse = await fetch(downloadUrl);
+
+            if (!downloadResponse.ok) {
+                throw new Error(`Could not download ${pcSong.fileName}`);
+            }
+
+            const blob = await downloadResponse.blob();
+
+            if (!blob.size) {
+                throw new Error(`${pcSong.fileName} is empty.`);
+            }
+
+            const metadata = await readMetadata(blob, pcSong.fileName);
+
+            const newSong = {
+                id: crypto.randomUUID(),
+                name: pcSong.fileName,
+                title: metadata?.title || pcSong.name,
+                artist: metadata?.artist || "Unknown artist",
+                album: metadata?.album || "Unknown album",
+                artwork: metadata?.artwork || null,
+                metadataRead: Boolean(metadata),
+                size: blob.size,
+                blob,
+                added: Date.now(),
+                source: "PC"
+            };
+
+            await saveSong(newSong);
+
+            existingSongs.push(newSong);
+            downloaded++;
+        }
+
+        await loadSongs();
+
+        elements.storageStatus.textContent =
+            `Sync complete! ${downloaded} downloaded, ${skipped} already saved.`;
+
+        pcSyncButton.textContent = "✓ Sync complete";
+
+    } catch (error) {
+        console.error("PC sync failed:", error);
+
+        elements.storageStatus.textContent =
+            `Sync failed: ${error.message}`;
+
+        pcSyncButton.textContent = "↻ Try again";
+    } finally {
+        pcSyncButton.disabled = false;
+    }
+}
+
+// OLD SONGS AND DUPLICATES
+
 async function updateOldSongs() {
     for (const song of songs) {
         const needsMetadata =
@@ -196,7 +327,6 @@ async function updateOldSongs() {
     }
 }
 
-// Remove duplicate imports with the same filename and size.
 async function removeDuplicates() {
     const seen = new Set();
 
@@ -218,8 +348,6 @@ async function loadSongs() {
 
     songs = await getAllSongs();
 
-    elements.storageStatus.textContent = "Checking song information...";
-
     await updateOldSongs();
 
     songs = await getAllSongs();
@@ -230,6 +358,8 @@ async function loadSongs() {
         `${songs.length} songs in your library`;
 }
 
+// PLAYER
+
 function formatTime(seconds) {
     if (!Number.isFinite(seconds)) return "0:00";
 
@@ -239,7 +369,6 @@ function formatTime(seconds) {
     return `${minutes}:${String(remaining).padStart(2, "0")}`;
 }
 
-// Creates an image using the song's embedded artwork.
 function createArtwork(song, className = "") {
     const image = document.createElement("img");
 
@@ -435,7 +564,11 @@ function toggleLike() {
     renderSongs();
 }
 
+// EVENTS
+
 function setupEvents() {
+    createPCSyncButton();
+
     elements.importButton.addEventListener("click", () => {
         elements.fileInput.click();
     });
@@ -531,6 +664,8 @@ function setupEvents() {
     });
 }
 
+// START
+
 async function initialize() {
     try {
         db = await openDatabase();
@@ -548,10 +683,11 @@ async function initialize() {
 
         if (!window.jsmediatags) {
             elements.storageStatus.textContent =
-                "Music loaded, but the cover-art reader did not load. Check your internet connection.";
+                "Music loaded. Cover-art reader unavailable.";
         }
     } catch (error) {
         console.error("Wavelength initialization failed:", error);
+
         elements.storageStatus.textContent =
             "Could not load your music library.";
     }
